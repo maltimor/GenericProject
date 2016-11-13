@@ -1,0 +1,408 @@
+package es.maltimor.servlet;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.sql.Blob;
+import java.sql.Clob;
+import java.util.Collection;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Map;
+
+import javax.naming.NamingException;
+import javax.naming.directory.DirContext;
+import javax.servlet.RequestDispatcher;
+import javax.servlet.ServletContext;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.Part;
+
+import org.apache.naming.resources.Resource;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import es.maltimor.genericRest.GenericServiceDao;
+import es.maltimor.genericUser.UserDao;
+
+public class DispatchServlet extends HttpServlet {
+	final Logger log = LoggerFactory.getLogger(DispatchServlet.class);
+	private static final long serialVersionUID = -4491812904732286128L;
+	private Map<String,Object> cfg;
+	private DirContext dirContext;
+	private UserDao userDao;
+	private GenericServiceDao gservice;
+	private String table;
+	
+	public Map<String, Object> getCfg() {
+		return cfg;
+	}
+	public void setCfg(Map<String, Object> cfg) {
+		this.cfg = cfg;
+	}
+	public UserDao getUserDao() {
+		return userDao;
+	}
+	public void setUserDao(UserDao userDao) {
+		this.userDao = userDao;
+	}
+	public GenericServiceDao getGservice() {
+		return gservice;
+	}
+	public void setGservice(GenericServiceDao gservice) {
+		this.gservice = gservice;
+	}
+	public String getTable() {
+		return table;
+	}
+	public void setTable(String table) {
+		this.table = table;
+	}
+	public DirContext getDirContext() {
+		return dirContext;
+	}
+	public void setDirContext(DirContext dirContext) {
+		this.dirContext = dirContext;
+	}
+	
+	@Override
+	public void init() throws ServletException {
+		super.init();
+		//inicializolas propiedades del servlet
+		this.cfg = new HashMap<String,Object>();
+		Enumeration<String> e = getServletContext().getAttributeNames();
+		while (e.hasMoreElements()){
+			String attr=e.nextElement();
+			Object value=getServletContext().getAttribute(attr);
+			cfg.put(attr.toLowerCase(), value);
+		}
+		userDao=(UserDao)cfg.get("userdao");
+		gservice=(GenericServiceDao)cfg.get("gservice");
+		table=(String)cfg.get("table");
+		dirContext=(DirContext)cfg.get("dircontext");
+	}
+
+	//*******************************************************
+
+
+		@Override
+		protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+			handleRequest(req,resp);
+		}
+
+		@Override
+		protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+			handleRequest(req,resp);
+		}
+
+
+		public void handleRequest(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+			long initTime = System.currentTimeMillis();
+			log.debug("================ DATOS DEL REQUEST =============="+initTime);
+			pintaRequest(request);
+			log.debug("=================================================");
+
+			//pasos:
+			//1 identificar la url y el recurso
+			//2 despachar
+			
+			//1 identificar la url y el recurso
+			try{
+				String path = request.getPathInfo();
+				if (path==null) path="/";
+				if (!path.startsWith("/")) path="/"+path;
+				
+				//1a ver si esta en ficheros
+				Resource resource=null;
+				try {
+					Object obj = dirContext.lookup(path);
+					if (obj instanceof Resource) resource = (Resource) obj; 
+				} catch (NamingException e2) {
+				}
+				
+				if (resource!=null){
+					//HttpServlet servlet = (HttpServlet) cfg.get("servlet");
+					ServletContext context = this.getServletContext();
+					RequestDispatcher dispatcher = context.getNamedDispatcher("default");
+					dispatcher.forward(request,response);
+					//if (dispatcher==null) {
+						//TODO Establecer el content-type y el content-disposition
+/*						String mimeType = this.getServletContext().getMimeType(path);
+						response.setContentType(mimeType!=null?mimeType:"text/html");
+						sendResourceStream(path, resource, response);*/
+					/*} else {
+						//TODO cambiar la ruta!!!
+						System.out.println("Redirigir a default:"+path);
+						dispatcher.forward(request,response);
+					}*/
+					return;
+				}
+				
+				Map<String,Object> map = gservice.getById(null, table, path, null);
+				if (map==null){
+					log.debug("####### NO ESTA");
+					response.sendError(HttpServletResponse.SC_NOT_FOUND,"Elemento no encontrado");
+					return;
+				}
+				Object value = map.get("CONTENT");
+				Blob blob = (Blob) value;
+				byte[] buff= blob.getBytes(1,(int) blob.length());
+				//response.setContentType(contentType);
+				//response.setCharacterEncoding(charset);
+				OutputStream o = response.getOutputStream();
+				o.write(buff);
+			} catch (Exception e){
+				e.printStackTrace();
+				response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR,e.getMessage());
+				return;
+			}
+			
+			//TODO Establecer el content-type y el content-disposition
+			//String mimeType = cfg.getServlet().getServletContext().getMimeType(fileName);
+			//response.setContentType(mimeType!=null?mimeType:"text/html");
+			//Dispatcher.sendResourceStream(fileName,resource, response);
+			
+			
+			/*URLComponents urlComponents = new URLComponents(cfg.getServerName(),cfg.getUrlCharset(),request.getRequestURI(), request.getQueryString());
+			log.debug("URLComponents:"+urlComponents.toString());
+			if (!urlComponents.isValid()){
+				response.sendError(400,"Url mal escrita");
+				return;
+			}
+			domSession.setUrlComponents(urlComponents);*/
+
+			//en funcion del action busco un manejador y lo ejecuto
+			//CASO ESPECIAL DEL ELEMENTO INICIAL "/" -> redirigir al elemento correspondiente
+			/*if (urlComponents.getElFileName().equals("/")){
+				// TODO decicir si hacer un redirect o modificar el urlcomponents y seguir ejecutando codigo
+				// de momento un redirect
+				if (cfg.getDefaultElement()!=null) response.sendRedirect(cfg.getDefaultElement());
+				return;
+			}
+			String filter = urlComponents.getActionName();
+			HttpFilter uAction = cfg.getFilters().get(filter);
+			if (uAction==null){
+				response.sendError(400,"No encontrado dispatcher para "+filter);
+				return;
+			}*/
+			
+			//2.5 comprobar la seguridad
+			/*try {
+				cfg.getSecurityPolice().checkPermission(urlComponents.getElName(), filter, cfg.getUserInfo().getRoles("|"), "|");
+			} catch (SecurityException e) {
+				response.sendError(400,"No tiene permisos para acceder "+filter);
+				return;
+			}*/
+			
+			//3 despachar
+			//configurar el filtro pasandole la configuracion del servidor
+			// BUG content-type
+			//response.setContentType("text/html");
+			/*uAction.setCfg(cfg);
+			uAction.doFilter(domSession,request,response);*/
+			long endTime = System.currentTimeMillis();
+			log.debug("BasicServlet:"+((endTime-initTime)/1000.0)+" seg.");
+		}
+		
+		public void sendResourceStream(String fileName, Resource resource,HttpServletResponse response){
+			try{
+				//o.write(resource.getContent());
+				
+				//detecto la longitud
+				InputStream in = resource.streamContent();
+				System.out.println("Send resource stream: fname="+fileName+" available="+in.available());
+				response.setContentLength(in.available());
+				
+				OutputStream o = response.getOutputStream();
+				int b = 1;
+				byte[] buff = new byte[16384];
+				while (b>0){
+					b = in.read(buff);
+					if (b>0) o.write(buff,0,b);
+				}
+				in.close();
+			} catch (Exception e){
+				e.printStackTrace();
+			}
+		}
+
+		public void pintaRequest(HttpServletRequest request){
+			log.debug("request.getAuthType="+request.getAuthType());
+			log.debug("request.getContextPath="+request.getContextPath());
+			log.debug("request.getContentType="+request.getContentType());
+			log.debug("request.getContentLength="+request.getContentLength());
+			log.debug("request.getCharacterEncoding="+request.getCharacterEncoding());
+			log.debug("request.getLocalAddr="+request.getLocalAddr());
+			log.debug("request.getLocalName="+request.getLocalName());
+			log.debug("request.getLocalPort="+request.getLocalPort());
+			log.debug("request.getMethod="+request.getMethod());
+			log.debug("request.getPathInfo="+request.getPathInfo());
+			log.debug("request.getPathTranslated="+request.getPathTranslated());
+			log.debug("request.getProtocol="+request.getProtocol());
+			log.debug("request.getQueryString="+request.getQueryString());
+			log.debug("request.getRemoteAddr="+request.getRemoteAddr());
+			log.debug("request.getRemoteHost="+request.getRemoteHost());
+			log.debug("request.getRemotePort="+request.getRemotePort());
+			log.debug("request.getRemoteUser="+request.getRemoteUser());
+			log.debug("request.getRequestedSessionId="+request.getRequestedSessionId());
+			log.debug("request.getRequestURI="+request.getRequestURI());
+			log.debug("request.getRequestURL="+request.getRequestURL());
+			log.debug("request.getScheme="+request.getScheme());
+			log.debug("request.getServerName="+request.getServerName());
+			log.debug("request.getServerPort="+request.getServerPort());
+			log.debug("request.getServletPath="+request.getServletPath());
+			
+			Collection<Part> parts = null;
+			boolean hayParts = false;
+			try{
+				parts = request.getParts();
+				hayParts = true;
+			} catch (Exception e){ }
+
+			log.debug("request.getAttributes:");
+			Enumeration<String> names = request.getAttributeNames();
+			while (names.hasMoreElements()){
+				String name = names.nextElement();
+				log.debug(name+"="+request.getAttribute(name));
+			}
+			Map<String,String[]> params = request.getParameterMap();
+			log.debug("request.getParameterMap:("+params.size()+")");
+			/*for(String key:params.keySet()){
+				String[] values = params.get(key);
+				System.out.print(key + "=");
+				for(int i=0;i<values.length;i++) System.out.print(values[i]+", ");
+				System.out.println();
+			}*/
+
+			if (hayParts){
+				try{
+					log.debug("request.getParts:("+parts.size()+")");
+					int j=0;
+					for(Part part:parts){
+						log.debug("Part("+j+"): name="+part.getName()+" contentType="+part.getContentType()+
+								" size="+part.getSize()+" headers.size="+part.getHeaderNames().size());
+						j++;
+					}
+				} catch (Exception e){
+					log.error("ERROR al obtener los parts."+e.getMessage());
+				}
+			}
+		}
+				
+		
+}
+/*	
+	
+	
+	public class ResourceAction implements HttpFilter {
+		final Logger log = LoggerFactory.getLogger(ResourceAction.class);
+		private ServerConfig cfg;
+		
+		public void doFilter(DominoSession domSession, HttpServletRequest request, HttpServletResponse response) throws IOException,ServletException{
+			URLComponents urlComponents = domSession.getUrlComponents();
+			String fileName = urlComponents.getElFileName();
+			Resource resource = Resources.getResourceTypeList(cfg.getDirContext(),"fileresource|imageresource|stylesheetresource|","[|]",fileName);
+			if (resource==null){
+				log.debug("####### NO ESTA");
+				response.sendError(HttpServletResponse.SC_NOT_FOUND,"Elemento no encontrado");
+				return;
+			}
+			//TODO Establecer el content-type y el content-disposition
+			String mimeType = cfg.getServlet().getServletContext().getMimeType(fileName);
+			response.setContentType(mimeType!=null?mimeType:"text/html");
+			Dispatcher.sendResourceStream(fileName,resource, response);
+			
+		
+			
+		}
+
+		public ServerConfig getCfg() {
+			return cfg;
+		}
+
+		public void setCfg(ServerConfig cfg) {
+			this.cfg = cfg;
+		}
+		
+	}
+
+}
+
+
+package es.carm.mydom.filters.utils;
+
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.servlet.http.HttpServletResponse;
+import org.apache.naming.resources.Resource;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+public class Dispatcher {
+	public static void sendResourceContent(Resource resource,HttpServletResponse response){
+		try{
+			OutputStream o = response.getOutputStream();
+			o.write(resource.getContent());
+		} catch (Exception e){
+			e.printStackTrace();
+		}
+	}
+
+	public static void sendResourceStream(String fileName, Resource resource,HttpServletResponse response){
+		try{
+			//o.write(resource.getContent());
+			
+			//detecto la longitud
+			InputStream in = resource.streamContent();
+			System.out.println("Send resource stream: fname="+fileName+" available="+in.available());
+			response.setContentLength(in.available());
+			
+			OutputStream o = response.getOutputStream();
+			int b = 1;
+			byte[] buff = new byte[16384];
+			while (b>0){
+				b = in.read(buff);
+				if (b>0) o.write(buff,0,b);
+			}
+			in.close();
+		} catch (Exception e){
+			e.printStackTrace();
+		}
+	}
+	
+	public static void sendString(String text,String charset,HttpServletResponse response){
+		sendString(text,"text/html",charset,response);
+	}
+
+	public static void sendString(String text,String contentType, String charset,HttpServletResponse response){
+		try{
+			response.setContentType(contentType);
+			response.setCharacterEncoding(charset);
+			OutputStream o = response.getOutputStream();
+			o.write(text.getBytes(charset));
+		} catch (Exception e){
+			e.printStackTrace();
+		}
+	}
+	
+	public static void sendArrayString(List<String> text,String charset,HttpServletResponse response){
+		sendArrayString(text,"text/html",charset,response);
+	}
+	public static void sendArrayString(List<String> text,String contentType, String charset,HttpServletResponse response){
+		try{
+			response.setContentType(contentType);
+			response.setCharacterEncoding(charset);
+			OutputStream o = response.getOutputStream();
+			for(String item:text) o.write(item.getBytes(charset));
+		} catch (Exception e){
+			e.printStackTrace();
+		}
+	}
+}
+*/

@@ -326,6 +326,7 @@ public class GenericMapperInfo {
 		else if (tipo.equals("DECIMAL")) tipo = "N";
 		else if (tipo.equals("INT")) tipo = "N";
 		else if (tipo.equals("DOUBLE")) tipo = "N";
+		//else if (tipo.equals("CLOB")) tipo = "T";			// TODO Crear un tipo C
 		else System.out.println("WARNING: Convertir Tipo NO RECONOCIDO:"+tipo);
 		return tipo;
 	}

@@ -37,7 +37,8 @@ public class GenericServiceMapperProvider {
 		if (filter==null) filter="";
 		else filter = filter.replace("'", "''");
 		
-		String sql = "SELECT count(*) AS COUNT FROM ("+resolver.getSQL(user,table)+")";
+//		String sql = "SELECT count(*) AS COUNT FROM ("+resolver.getSQL(user,table)+")";
+		String sql = "SELECT count(*) FROM ("+resolver.getSQL(user,table)+")";
 		if (driver.equals("mysql") || driver.equals("informix") || driver.equals("access")) sql+=" t";
 //		if (fields!=null && fields.size()>0 && !filter.equals("")){
 //			//sql += filtrosWhere(info, fields, filter);
@@ -73,10 +74,10 @@ public class GenericServiceMapperProvider {
 		// TODO elimino los BLOB y CLOB AQUI y en esta llamada
 		if (lfields.equals("*")){
 			for (GenericMapperInfoColumn column : columns) {
-				if (!column.getType().endsWith("LOB")) {
+//				if (!column.getType().endsWith("LOB")) {
 					fields.add(column.getName().toUpperCase());
 					types.add(column.getType());
-				}
+//				}
 			}
 		} else {
 			//Se supone que la lista de nombres viene separada por comas, como truco se inserta una coma al principio y a l final
@@ -478,15 +479,17 @@ public class GenericServiceMapperProvider {
 				
 				//aqui deberia recuperar el tipo de dato segun la columna
 				GenericMapperInfoColumn col = null;
-				if (!key.equals("NULL")) col = map.get(key.toLowerCase());
-				if (col!=null) {
-					String strType = col.getType().toUpperCase();
-					if (strType.equals("T")) type = TYPE_TEXT;
-					else if (strType.equals("N")) type = TYPE_NUMBER;
-					else if (strType.equals("F")) type = TYPE_DATE;
-					else if (strType.equals("D")) type = TYPE_DATE;
-					else type = TYPE_TEXT;
-					//System.out.println("COL:"+col);
+				if (!key.equals("NULL")) {
+					col = map.get(key.toLowerCase());
+					if (col!=null) {
+						String strType = col.getType().toUpperCase();
+						if (strType.equals("T")) type = TYPE_TEXT;
+						else if (strType.equals("N")) type = TYPE_NUMBER;
+						else if (strType.equals("F")) type = TYPE_DATE;
+						else if (strType.equals("D")) type = TYPE_DATE;
+						else type = TYPE_TEXT;
+						//System.out.println("COL:"+col);
+					} else key = "#{"+key.replaceAll("\\{", "").replaceAll("\\}", "")+"}";	//evita sql injection?
 				}
 
 				//tengo en cuenta que por defecto todos los operadores añaden % al principio y al final
@@ -527,6 +530,11 @@ public class GenericServiceMapperProvider {
 				} else if (op.equals("=>")){
 					//aplico la transformacion a valor en funcion de su tipo de datos
 					if (!valorKey) valor = "'"+valor.replace("'","''")+"'";
+				} else if (op.equals(" IS ")){
+					//para esta operacion solo se permmite NULL y NOT NULL
+					if (valor.equalsIgnoreCase("NULL") || valor.equalsIgnoreCase("NOT NULL")){
+						valor = valor.toUpperCase();
+					} else if (!valorKey) valor = "'"+valor.replace("'","''")+"'";
 				} else {
 					//aplico la transformacion a valor en funcion de su tipo de datos
 					if (!valorKey&&((type==TYPE_TEXT)||(type==TYPE_DATE))) valor = "'"+valor.replace("'","''")+"'";

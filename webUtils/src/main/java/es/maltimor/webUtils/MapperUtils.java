@@ -1,5 +1,6 @@
 package es.maltimor.webUtils;
 
+import java.sql.Clob;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Map;

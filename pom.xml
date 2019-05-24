@@ -3,7 +3,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>es.maltimor.genericProject</groupId>
 	<artifactId>genericProject</artifactId>
-	<version>1.0.1-RELEASE</version>
+	<version>1.0.5-RELEASE</version>
 	<packaging>pom</packaging>
 
 	<properties>

@@ -13,11 +13,12 @@ public class UserDaoImplMock implements UserDao, UserPreferencesDao {
 	private Map<String,String> preferencesMapping;
 
 	public UserDaoImplMock(){
-		this.preferences = new HashMap<String,Object>();
+		this.preferences = new HashMap<String, Object>();
 		this.preferencesMapping = new HashMap<String,String>();
 	}
 	
 	public User initUser(String login, String app) throws Exception {
+		//System.out.println("Init user:"+login+" "+app+" := "+preferences.get(login));
 		//no cacheao y elimino la posible cache
 		User user = new User();
 		user.setLogin(login);
@@ -32,9 +33,11 @@ public class UserDaoImplMock implements UserDao, UserPreferencesDao {
 		System.out.println("** pm="+preferencesMapping);
 		System.out.println("** p="+preferences);
 		Map<String,Object> userAttr = user.getAttr();
+		Map<String, Object> userPreferences = (Map<String, Object>) preferences.get(login);
+		if (userPreferences==null) userPreferences = new HashMap<String,Object>();
 		for(String key:preferencesMapping.keySet()){
-			System.out.println("** KEY="+key+" pm="+preferencesMapping.get(key)+" pv="+preferences.get(key));
-			userAttr.put(preferencesMapping.get(key), preferences.get(key));
+			//System.out.println("** KEY="+key+" pm="+preferencesMapping.get(key)+" pv="+userPreferences.get(key));
+			userAttr.put(preferencesMapping.get(key), userPreferences.get(key));
 		}
 		
 		return user;
@@ -49,11 +52,15 @@ public class UserDaoImplMock implements UserDao, UserPreferencesDao {
 	}
 	
 	public Map<String, Object> getPreferences(String login, String app) throws Exception {
-		return preferences;
+		//System.out.println("GetPreferences:"+login+" "+app+" := "+preferences.get(login));
+		Map<String,Object> userPreferences = (Map<String, Object>) preferences.get(login);
+		if (userPreferences==null) userPreferences = new HashMap<String,Object>();
+		return (Map<String, Object>) userPreferences;
 	}
 
 	public void setPreferences(String login, String app, Map<String, Object> data) throws Exception {
-		this.preferences=data;
+		//System.out.println("SetPreferences:"+login+" "+app+" : "+data);
+		this.preferences.put(login, data);
 	}
 
 	public String getDefaultUser() {

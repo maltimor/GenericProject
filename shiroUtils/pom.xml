@@ -3,7 +3,7 @@
 	<parent>
 		<groupId>es.maltimor.genericProject</groupId>
 		<artifactId>genericProject</artifactId>
-		<version>1.0.1-RELEASE</version>
+		<version>1.0.5-RELEASE</version>
 	</parent>
 	<artifactId>shiroUtils</artifactId>
 	<packaging>jar</packaging>
